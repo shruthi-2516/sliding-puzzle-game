@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sliding Puzzle</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            background-color: #b3e0ff;
+            position: relative;
+            overflow: hidden;
+        }
+        h1 {
+            font-size: 2.5em;
+            color: #d147a3;
+            margin: 20px 0;
+            text-shadow: 2px 2px #fff0f5;
+            position: relative;
+            z-index: 10; /* ensures heading stays above clouds */
+        }
+        .cloud {
+            position: absolute;
+            background-color: #fdf5e6;
+            border-radius: 50%;
+            opacity: 0.8;
+            z-index: 1; /* clouds go behind heading */
+        }
+        .cloud::before, .cloud::after {
+            content: '';
+            position: absolute;
+            background-color: inherit;
+            border-radius: 50%;
+        }
+        .cloud {
+            width: 120px; height: 70px;
+        }
+        .cloud::before {
+            width: 90px; height: 90px;
+            top: -45px; left: 15px;
+        }
+        .cloud::after {
+            width: 80px; height: 80px;
+            top: -35px; left: 60px;
+        }
+        #controls {
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 5; /* controls above clouds */
+        }
+        #grid-size {
+            font-size: 1.2em;
+            padding: 5px 10px;
+            border-radius: 10px;
+            border: 2px solid #ffb6c1;
+            background-color: #fff0f5;
+            color: #555;
+            outline: none;
+        }
+        #shuffle-button {
+            font-size: 1.2em;
+            padding: 8px 15px;
+            margin-left: 10px;
+            border-radius: 12px;
+            border: none;
+            background-color: #ffb6c1;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        #shuffle-button:hover {
+            background-color: #d147a3;
+        }
+        #puzzle-container {
+            display: grid;
+            gap: 2px;
+            border: 4px solid #ffb6c1;
+            margin: 20px auto;
+            background-color: #fff0f5;
+            border-radius: 10px;
+            padding: 5px;
+            position: relative;
+            z-index: 2;
+        }
+        .puzzle-piece {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2em;
+            font-weight: bold;
+            color: #555;
+            background-color: #fdf5e6;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out;
+        }
+        .empty {
+            background-color: transparent;
+            border: none;
+            cursor: default;
+        }
+        #timer, #moves {
+            font-size: 1.2em;
+            margin: 10px;
+            color: #d147a3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sliding Puzzle</h1>
+    <div id="controls">
+        <label for="grid-size">Grid Size:</label>
+        <select id="grid-size">
+            <option value="3">3x3</option>
+            <option value="4" selected>4x4</option>
+            <option value="5">5x5</option>
+        </select>
+        <button id="shuffle-button">Shuffle</button>
+        <span id="timer">Time: 00:00</span>
+        <span id="moves">Moves: 0</span>
+    </div>
+    <div id="puzzle-container"></div>
+
+    <script>
+        const puzzleContainer = document.getElementById('puzzle-container');
+        const shuffleButton = document.getElementById('shuffle-button');
+        const gridSizeSelector = document.getElementById('grid-size');
+        const timerDisplay = document.getElementById('timer');
+        const movesDisplay = document.getElementById('moves');
+        let size = 4;
+        let pieces = [];
+        let emptyPiece;
+        let moves = 0;
+        let timerInterval;
+        let startTime;
+        let bestTime = null;
+
+        function createShuffledPuzzle() {
+            puzzleContainer.innerHTML = '';
+            size = parseInt(gridSizeSelector.value);
+            puzzleContainer.style.width = `${size * 100}px`;
+            puzzleContainer.style.height = `${size * 100}px`;
+            puzzleContainer.style.gridTemplateColumns = `repeat(${size}, 100px)`;
+            puzzleContainer.style.gridTemplateRows = `repeat(${size}, 100px)`;
+
+            let numbers = [...Array(size * size - 1).keys()].map(x => x + 1).concat(null);
+            do {
+                numbers.sort(() => Math.random() - 0.5);
+            } while (!isSolvable(numbers));
+
+            pieces = [];
+            numbers.forEach((num) => {
+                const piece = document.createElement('div');
+                piece.className = 'puzzle-piece';
+                if (num !== null) {
+                    piece.textContent = num;
+                } else {
+                    piece.classList.add('empty');
+                    emptyPiece = piece;
+                }
+                puzzleContainer.appendChild(piece);
+                pieces.push(piece);
+            });
+
+            moves = 0;
+            movesDisplay.textContent = 'Moves: 0';
+            startTimer();
+        }
+
+        function isSolvable(numbers) {
+            let invCount = 0;
+            const puzzleNumbers = numbers.map(n => (n === null ? size * size : n));
+            for (let i = 0; i < size * size - 1; i++) {
+                for (let j = i + 1; j < size * size; j++) {
+                    if (puzzleNumbers[i] !== size * size && puzzleNumbers[j] !== size * size && puzzleNumbers[i] > puzzleNumbers[j]) {
+                        invCount++;
+                    }
+                }
+            }
+            return invCount % 2 === 0;
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            startTime = Date.now();
+            timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                const seconds = String(elapsed % 60).padStart(2, '0');
+                timerDisplay.textContent = `Time: ${minutes}:${seconds}`;
+            }, 1000);
+        }
+
+        function swapPieces(index1, index2) {
+            const temp = pieces[index1].textContent;
+            pieces[index1].textContent = pieces[index2].textContent;
+            pieces[index2].textContent = temp;
+            pieces[index1].classList.toggle('empty');
+            pieces[index2].classList.toggle('empty');
+        }
+
+        function isValidMove(clickedIndex, emptyIndex) {
+            const row = Math.floor(clickedIndex / size);
+            const col = clickedIndex % size;
+            const emptyRow = Math.floor(emptyIndex / size);
+            const emptyCol = emptyIndex % size;
+            return (Math.abs(row - emptyRow) === 1 && col === emptyCol) || 
+                   (Math.abs(col - emptyCol) === 1 && row === emptyRow);
+        }
+
+        function movePiece(event) {
+            const clickedPiece = event.target;
+            if (!clickedPiece.classList.contains('puzzle-piece') || clickedPiece.classList.contains('empty')) return;
+
+            const emptyIndex = pieces.indexOf(emptyPiece);
+            const clickedIndex = pieces.indexOf(clickedPiece);
+
+            if (isValidMove(clickedIndex, emptyIndex)) {
+                swapPieces(clickedIndex, emptyIndex);
+                emptyPiece = pieces[clickedIndex];
+                moves++;
+                movesDisplay.textContent = `Moves: ${moves}`;
+                checkWin();
+            }
+        }
+
+        function checkWin() {
+            const currentOrder = pieces.map(piece => piece.textContent || null);
+            const correctOrder = [...Array(size * size - 1).keys()].map(x => (x + 1).toString()).concat(null);
+
+            if (JSON.stringify(currentOrder) === JSON.stringify(correctOrder)) {
+                clearInterval(timerInterval);
+                const finalTime = timerDisplay.textContent.split(": ")[1];
+                setTimeout(() => {
+                    alert(`🎉 You solved the puzzle in ${finalTime}!`);
+                    if (!bestTime || Date.now() - startTime < bestTime) {
+                        bestTime = Date.now() - startTime;
+                        alert(`🏆 New Best Time: ${finalTime}!`);
+                    }
+                }, 300);
+            }
+        }
+
+        function createClouds() {
+            for (let i = 0; i < 15; i++) {
+                const cloud = document.createElement('div');
+                cloud.className = 'cloud';
+                cloud.style.top = `${Math.random() * 90}vh`;
+                cloud.style.left = `${Math.random() * 90}vw`;
+                document.body.appendChild(cloud);
+            }
+        }
+
+        puzzleContainer.addEventListener('click', movePiece);
+        shuffleButton.addEventListener('click', createShuffledPuzzle);
+        gridSizeSelector.addEventListener('change', createShuffledPuzzle);
+
+        createShuffledPuzzle();
+        createClouds();
+    </script>
+</body>
+</html>
